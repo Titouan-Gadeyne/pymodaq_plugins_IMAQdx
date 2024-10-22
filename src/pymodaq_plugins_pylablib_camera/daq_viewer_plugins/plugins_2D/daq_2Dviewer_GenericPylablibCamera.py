@@ -36,13 +36,12 @@ class DAQ_2DViewer_GenericPylablibCamera(DAQ_Viewer_base):
     roi_pos_size = QtCore.QRectF(0, 0, 10, 10)
     axes = []
 
-
     def init_controller(self):
         raise NotImplementedError('This is a generic camera plugin for which .init_controller() has not been defined.')
 
     def ini_attributes(self):
         self.controller: None
-        self.pixel_width = 0.0  # pixel size in microns (0 if unknown)
+        self.pixel_width = None  # pixel size in microns
         self.x_axis = None
         self.y_axis = None
         self.last_tick = 0.0  # time counter used to compute FPS
@@ -173,7 +172,11 @@ class DAQ_2DViewer_GenericPylablibCamera(DAQ_Viewer_base):
     def _prepare_view(self):
         """Preparing a data viewer by emitting temporary data. Typically, needs to be called whenever the
         ROIs are changed"""
-        (hstart, hend, vstart, vend, *_) = self.controller.get_roi()
+        (hstart, hend, vstart, vend, *binning) = self.controller.get_roi()
+        try:
+            xbin, ybin = binning
+        except ValueError:  # some Pylablib `get_roi` do return just four values instead of six
+            xbin = ybin = 1
         height = hend - hstart
         width = vend - vstart
 
@@ -181,18 +184,18 @@ class DAQ_2DViewer_GenericPylablibCamera(DAQ_Viewer_base):
         self.settings.child('vdet').setValue(height)
         mock_data = np.zeros((width, height))
 
-        if self.pixel_width is not 0.0:
+        if self.pixel_width:  # if pixel_width is defined
             scaling = self.pixel_width
             unit = 'um'
         else:
             scaling = 1
             unit = 'Pxls'
 
-        self.x_axis = Axis(data=np.linspace(0, width*scaling, width, endpoint=False), label='X', units=unit, index=0)
+        self.x_axis = Axis(offset = vstart * scaling, scaling=scaling * xbin, size=width // xbin, label="X", units=unit, index=0)
 
         if width != 1 and height != 1:
             data_shape = 'Data2D'
-            self.y_axis = Axis(data=np.linspace(0, height*scaling, height, endpoint=False), label='Y', units=unit, index=1)
+            self.y_axis = Axis(offset= hstart * scaling, scaling=scaling * ybin, size=height // ybin, label='Y', units=unit, index=1)
             self.axes = [self.x_axis, self.y_axis]
 
         else:
