@@ -1,16 +1,16 @@
 pymodaq_plugins_pylablib (Generic library)
 ##########################################
 
-.. image:: https://img.shields.io/pypi/v/pymodaq_plugins_thorlabs.svg
-   :target: https://pypi.org/project/pymodaq_plugins_pylablib/
+.. image:: https://img.shields.io/pypi/v/pymodaq_plugins_pylablib_camera.svg
+   :target: https://pypi.org/project/pymodaq_plugins_pylablib_camera/
    :alt: Latest Version
 
 .. image:: https://readthedocs.org/projects/pymodaq/badge/?version=latest
    :target: https://pymodaq.readthedocs.io/en/stable/?badge=latest
    :alt: Documentation Status
 
-.. image:: https://github.com/Attolab/pymodaq_plugins_pylablib/workflows/Upload%20Python%20Package/badge.svg
-   :target: https://github.com/PyMoDAQ/pymodaq_plugins_pylablib
+.. image:: https://github.com/Attolab/pymodaq_plugins_pylablib_camera/workflows/Upload%20Python%20Package/badge.svg
+   :target: https://github.com/PyMoDAQ/pymodaq_plugins_pylablib_camera
    :alt: Publication Status
 
 PyMoDAQ generic plugins meant to be subclassed for quick implementation of cameras using the pylablib library.
