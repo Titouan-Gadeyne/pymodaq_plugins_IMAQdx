@@ -32,8 +32,7 @@ Below is the list of instruments included in this plugin
 Viewer2D
 ++++++++
 
-* **GenericPylablibCamera**: Generic plugin for a camera, handling hardware ROI, hardware binning, grabbing frames using a callback, switching between 1D and 2D depending on data shape, and optional framerate display.
-The class needs to be subclassed in order to define two simple ``list_cameras`` and ``init_controller`` methods, which depend on the actual camera.
+* **GenericPylablibCamera**: Generic plugin for a camera, handling hardware ROI, hardware binning, grabbing frames using a callback, switching between 1D and 2D depending on data shape, and optional framerate display. The class needs to be subclassed in order to define two simple ``list_cameras`` and ``init_controller`` methods, which depend on the actual camera.
 
 Infos
 =====
