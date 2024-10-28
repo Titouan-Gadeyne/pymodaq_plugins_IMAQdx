@@ -59,7 +59,8 @@ class DAQ_2DViewer_GenericPylablibCamera(DAQ_Viewer_base):
             A given parameter (within detector_settings) whose value has been changed by the user
         """
         if param.name() == "exposure_time":
-            self.controller.set_exposure(param.value() / 1000)
+            exp = self.controller.set_exposure(param.value() / 1000)
+            self.settings.child("timing_opts", "exposure_time").setValue(exp*1000)
 
         if param.name() == "fps_on":
             self.settings.child('timing_opts', 'fps').setOpts(visible=param.value())
