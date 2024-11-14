@@ -5,17 +5,14 @@ from pymodaq.utils.parameter import Parameter
 from qtpy import QtWidgets, QtCore
 from time import perf_counter
 import numpy as np
+from pylablib.devices import IMAQdx
 
 
-class DAQ_2DViewer_GenericPylablibCamera(DAQ_Viewer_base):
+class DAQ_2DViewer_IMAQdxCamera(DAQ_Viewer_base):
     """
-    IMPORTANT: THIS IS A GENERIC CLASS THAT DOES NOT WORK ON ITS OWN!
+    To be used with NI IMAQdx cameras supported by the pylablib library, see here:
+    https://pylablib.readthedocs.io/en/stable/devices/IMAQdx.html
 
-    It is meant to be used for cameras supported by the pylablib library, see here:
-    https://pylablib.readthedocs.io/en/latest/devices/cameras_root.html
-
-    The class needs to be subclassed, the subclass only has to define the camera_list and init_controller methods
-    and the plugin will work.
     """
 
     params = comon_parameters + [
@@ -26,8 +23,10 @@ class DAQ_2DViewer_GenericPylablibCamera(DAQ_Viewer_base):
         {'title': 'Binning', 'name': 'binning', 'type': 'list', 'limits': [1, 2], 'default': 1},
         {'title': 'Image width', 'name': 'hdet', 'type': 'int', 'value': 1, 'readonly': True, 'default': 1},
         {'title': 'Image height', 'name': 'vdet', 'type': 'int', 'value': 1, 'readonly': True, 'default': 1},
+        {'title': 'Gain', 'name': 'gain', 'type': 'int', 'value': 1, 'default': 1},
+        {'title': 'Brightness', 'name': 'brightness', 'type': 'int', 'value': 1, 'default': 1},
         {'title': 'Timing', 'name': 'timing_opts', 'type': 'group', 'children':
-            [{'title': 'Exposure Time (ms)', 'name': 'exposure_time', 'type': 'int', 'value': 1, 'default': 1},
+            [{'title': 'Exposure Time (?)', 'name': 'exposure_time', 'type': 'int', 'value': 1, 'default': 1},
              {'title': 'Compute FPS', 'name': 'fps_on', 'type': 'bool', 'value': True, 'default': True},
              {'title': 'FPS', 'name': 'fps', 'type': 'float', 'value': 0.0, 'readonly': True, 'default': 0.0}]
          }
@@ -36,8 +35,15 @@ class DAQ_2DViewer_GenericPylablibCamera(DAQ_Viewer_base):
     roi_pos_size = QtCore.QRectF(0, 0, 10, 10)
     axes = []
 
+    # Generate a  **list**  of available cameras. Only get the names
+    camera_list = IMAQdx.list_cameras(desc=False)
+    # Update the params
+    params[next((i for i, item in enumerate(params) if item["name"] == "camera_list"), None)]['limits'] = camera_list
+
     def init_controller(self):
-        raise NotImplementedError('This is a generic camera plugin for which .init_controller() has not been defined.')
+        # Init camera with currently selected name
+        camera = IMAQdx.IMAQdxCamera(self.settings["camera_list"])
+        return camera
 
     def ini_attributes(self):
         self.controller: None
@@ -59,8 +65,19 @@ class DAQ_2DViewer_GenericPylablibCamera(DAQ_Viewer_base):
             A given parameter (within detector_settings) whose value has been changed by the user
         """
         if param.name() == "exposure_time":
-            exp = self.controller.set_exposure(param.value() / 1000)
-            self.settings.child("timing_opts", "exposure_time").setValue(exp*1000)
+            self.controller.set_attribute_value('CameraAttributes::Shutter::Value', param.value())
+            exp = self.controller.get_attribute_value('CameraAttributes::Shutter::Value')
+            self.settings.child("timing_opts", "exposure_time").setValue(exp)
+
+        if param.name() == "gain":
+            self.controller.set_attribute_value('CameraAttributes::Gain::Value', param.value())
+            gain = self.controller.get_attribute_value('CameraAttributes::Gain::Value')
+            self.settings.child("gain").setValue(gain)
+
+        if param.name() == "brightness":
+            self.controller.set_attribute_value('CameraAttributes::Brightness::Value', param.value())
+            brightness = self.controller.get_attribute_value('CameraAttributes::Brightness::Value')
+            self.settings.child("brightness").setValue(brightness)
 
         if param.name() == "fps_on":
             self.settings.child('timing_opts', 'fps').setOpts(visible=param.value())
@@ -69,7 +86,7 @@ class DAQ_2DViewer_GenericPylablibCamera(DAQ_Viewer_base):
             if param.value():  # Switching on ROI
 
                 # We handle ROI and binning separately for clarity
-                (old_x, _, old_y, _, xbin, ybin) = self.controller.get_roi()  # Get current binning
+                (old_x, _, old_y, _) = self.controller.get_roi()  # Get current binning
 
                 x0 = self.roi_pos_size.x()
                 y0 = self.roi_pos_size.y()
@@ -77,21 +94,22 @@ class DAQ_2DViewer_GenericPylablibCamera(DAQ_Viewer_base):
                 height = self.roi_pos_size.height()
 
                 # Values need to be rescaled by binning factor and shifted by current x0,y0 to be correct.
+                xbin = ybin = 1
                 new_x = (old_x + x0) * xbin
                 new_y = (old_y + y0) * xbin
                 new_width = width * ybin
                 new_height = height * ybin
 
-                new_roi = (new_x, new_width, xbin, new_y, new_height, ybin)
+                new_roi = (new_x, new_width, new_y, new_height)
                 self.update_rois(new_roi)
                 param.setValue(False)
 
         if param.name() == 'binning':
             # We handle ROI and binning separately for clarity
-            (x0, w, y0, h, *_) = self.controller.get_roi()  # Get current ROI
+            (x0, w, y0, h) = self.controller.get_roi()  # Get current ROI
             xbin = self.settings.child('binning').value()
             ybin = self.settings.child('binning').value()
-            new_roi = (x0, w, xbin, y0, h, ybin)
+            new_roi = (x0, w, y0, h)
             self.update_rois(new_roi)
 
         if param.name() == "clear_roi":
@@ -104,7 +122,7 @@ class DAQ_2DViewer_GenericPylablibCamera(DAQ_Viewer_base):
                 # self.settings.child('ROIselect', 'y0').setValue(0)
                 # new_height = self.settings.child('ROIselect', 'height').setValue(hdet)
 
-                new_roi = (0, wdet, 1, 0, hdet, 1)
+                new_roi = (0, wdet, 0, hdet)
                 self.update_rois(new_roi)
                 param.setValue(False)
 
@@ -128,19 +146,26 @@ class DAQ_2DViewer_GenericPylablibCamera(DAQ_Viewer_base):
         """
         # Initialize camera class
         self.ini_detector_init(old_controller=controller,
-                               new_controller=self.init_controller())
+                                   new_controller=self.init_controller())
 
         # Get camera name
         self.settings.child('camera_info').setValue(self.controller.get_device_info()[1])
 
         # Set exposure time
-        self.controller.set_exposure(self.settings.child('timing_opts', 'exposure_time').value() / 1000)
+        self.controller.set_attribute_value('CameraAttributes::Shutter::Value', self.settings.child('timing_opts', 'exposure_time').value())
+
+        # Set gain
+        self.controller.set_attribute_value('CameraAttributes::Gain::Value', self.settings.child('gain').value())
+
+        # Set brightness
+        self.controller.set_attribute_value('CameraAttributes::Brightness::Value', self.settings.child('brightness').value())
 
         # FPS visibility
         self.settings.child('timing_opts', 'fps').setOpts(visible=self.settings.child('timing_opts', 'fps_on').value())
 
         # Update image parameters
-        (hstart, hend, vstart, vend, hbin, vbin) = self.controller.get_roi()
+        (hstart, hend, vstart, vend) = self.controller.get_roi()
+        hbin, vbin = 1, 1
         height = hend - hstart
         width = vend - vstart
         self.settings.child('binning').setValue(hbin)
@@ -173,11 +198,8 @@ class DAQ_2DViewer_GenericPylablibCamera(DAQ_Viewer_base):
     def _prepare_view(self):
         """Preparing a data viewer by emitting temporary data. Typically, needs to be called whenever the
         ROIs are changed"""
-        (hstart, hend, vstart, vend, *binning) = self.controller.get_roi()
-        try:
-            xbin, ybin = binning
-        except ValueError:  # some Pylablib `get_roi` do return just four values instead of six
-            xbin = ybin = 1
+        (hstart, hend, vstart, vend) = self.controller.get_roi()
+        xbin = ybin = 1
         height = hend - hstart
         width = vend - vstart
 
@@ -190,7 +212,7 @@ class DAQ_2DViewer_GenericPylablibCamera(DAQ_Viewer_base):
             unit = 'um'
         else:
             scaling = 1
-            unit = 'Pxls'
+            unit = 'pixel'
 
         self.x_axis = Axis(offset = vstart * scaling, scaling=scaling * xbin, size=width // xbin, label="X", units=unit, index=0)
 
@@ -218,15 +240,12 @@ class DAQ_2DViewer_GenericPylablibCamera(DAQ_Viewer_base):
 
     def update_rois(self, new_roi):
         # In pylablib, ROIs compare as tuples
-        (new_x, new_width, new_xbinning, new_y, new_height, new_ybinning) = new_roi
+        (new_x, new_width, new_y, new_height) = new_roi
         if new_roi != self.controller.get_roi():
-            # self.controller.set_attribute_value("ROIs",[new_roi])
             self.controller.set_roi(hstart=new_x,
                                     hend=new_x + new_width,
                                     vstart=new_y,
-                                    vend=new_y + new_height,
-                                    hbin=new_xbinning,
-                                    vbin=new_ybinning)
+                                    vend=new_y + new_height)
             self.emit_status(ThreadCommand('Update_Status', [f'Changed ROI: {new_roi}']))
             self.controller.clear_acquisition()
             self.controller.setup_acquisition()
