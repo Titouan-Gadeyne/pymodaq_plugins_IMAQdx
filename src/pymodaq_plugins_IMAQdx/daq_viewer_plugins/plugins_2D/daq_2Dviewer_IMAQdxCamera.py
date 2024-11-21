@@ -43,6 +43,7 @@ class DAQ_2DViewer_IMAQdxCamera(DAQ_Viewer_base):
     def init_controller(self):
         # Init camera with currently selected name
         camera = IMAQdx.IMAQdxCamera(self.settings["camera_list"])
+        camera.enable_raw_readout() # Avoids pixel format issues. (e.g. 'Mono8' works but not 'Mono 8'...)
         return camera
 
     def ini_attributes(self):
